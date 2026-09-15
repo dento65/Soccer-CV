@@ -36,7 +36,11 @@ def infer(video: Path, destination: Path) -> list[dict]:
     work.mkdir(parents=True, exist_ok=True)
     # The upstream inference writes fixed paths. Isolate one inference at a time
     # by running inside its release directory and moving the final artifact.
-    output = CALF / "inference" / "outputs" / "Predictions-v2.json"
+    output_dir = CALF / "inference" / "outputs"
+    # The released CALF script writes temporary video/features here. Create it
+    # on fresh Docker/Git checkouts before launching FFmpeg.
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output = output_dir / "Predictions-v2.json"
     output.unlink(missing_ok=True)
     env = os.environ.copy()
     env["PYTHONPATH"] = str(CALF.parent.parent.parent) + os.pathsep + env.get("PYTHONPATH", "")
