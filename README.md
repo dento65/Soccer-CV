@@ -20,7 +20,7 @@ Watch [the 16-second walkthrough](demo/pitchclipers_walkthrough.mp4): upload a s
 
 ## What the application does
 
-1. **Upload a video** - the UI first explains that local processing is intended for MP4 broadcast clips under one minute, captured from a wide pitch view.
+1. **Upload a video** - guidance beside the upload button and in the popup recommends MP4 broadcast clips under 30 seconds, captured from a wide pitch view.
 2. **Find football events (CALF)** - runs the released SoccerNet CALF action-spotting pipeline: ResNet-152 descriptors, PCA-512, and 17 action classes.
 3. **Detect players + ball** - applies YOLO11 COCO detections and ByteTrack association on uploads, then renders a player/ball tracking overlay.
 4. **Build a highlight reel** - creates event-centred windows, merges overlap, lets the user edit context, and exports the chosen clips to one MP4.

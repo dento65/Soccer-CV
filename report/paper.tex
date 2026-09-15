@@ -1,51 +1,70 @@
 \documentclass[10pt,twocolumn,letterpaper]{article}
 \usepackage[final]{cvpr}
 \usepackage[T1]{fontenc}
-\usepackage{times,amsmath}
+\usepackage{times,amsmath,booktabs}
+\usepackage{flushend}
 \usepackage[hidelinks]{hyperref}
 \begin{document}
-\title{PitchClipers: Learning to Select Context-Complete Football Highlights}
-\author{Ahmed Gabr \and Iyad Khamis \and Zaid Rafi}
+\title{PitchClipers: Context-Aware Football Highlight Construction\newline with Player--Ball Evidence}
+\author{Zaid Rafi}
 \maketitle
 \begin{abstract}
-Accurate action timestamps do not guarantee useful football highlights: a clip must show sufficient build-up and outcome while avoiding unrelated footage. We propose a lightweight, learnable clip-selection layer over pretrained action spotting, augmented by our Football Analytics module. The selector estimates contextual sufficiency from event confidence, candidate boundaries, and tracking evidence. We define a detector-independent Context Utility score combining event support, contextual completeness, and temporal precision. Our research question is whether learned clip selection improves highlight utility over confidence filtering under a fixed viewing budget. The study combines automatic evaluation against shared annotations with human assessment and an interactive demonstration.
+Football highlights must preserve an event's build-up and outcome while limiting viewing time. PitchClipers combines pretrained action spotting, asymmetric temporal decoding and player--ball evidence. We formulate context-based evaluation and implement threshold calibration. A controlled decoder experiment removes 32.7\% duplicate viewing time through interval merging, motivating separate measurement of action confidence and contextual sufficiency.
 \end{abstract}
 
-\section{Problem and Contribution}
-SoccerNet-v2~\cite{sn} provides action timestamps rather than highlight intervals. We define a \emph{useful highlight} as a clip that contains a correctly identified target event, preserves its necessary build-up and outcome, and limits unrelated footage. Spotting accuracy alone cannot establish these properties.
+\section{Motivation and Related Work}
+A goal timestamp omits the attacking build-up; a foul frame may omit the resulting decision. A useful highlight should preserve both event context and outcome with minimal unrelated footage. We ask: \emph{how can action proposals become context-complete highlights under a fixed viewing budget?}
 
-Our intended contributions are a low-cost clip-quality predictor, a detector-independent metric, and an ablation of player--ball evidence. The visual backbone remains frozen to limit compute.
+SoccerNet-v2~\cite{sn} benchmarks timestamp-based spotting. CALF~\cite{calf} learns temporal context; NetVLAD++~\cite{netvlad} separates past and future features. ActionFormer~\cite{actionformer} predicts action boundaries through multiscale temporal attention. These methods localize actions, whereas highlight boundaries must also preserve explanatory context. Our contribution is a reproducible interval decoder and context-evaluation formulation, supported by spatial evidence from detection and tracking~\cite{yolo,bytetrack}.
 
-\section{Proposed Computer-Vision Method}
-\textbf{Event proposals.} Our video-to-spot pipeline uses frozen ResNet-152 descriptors sampled at 2 FPS, the released 512-dimensional PCA representation, and the pretrained CALF model~\cite{calf}. Its temporal context model produces proposals $(t,c,s)$ for 17 football actions. The clip-selection interface also accepts outputs from other spotters, allowing the proposed method to be evaluated independently of CALF.
-
-\textbf{Learnable clip selection.} Around each proposal, we enumerate a small bank of asymmetric windows, spanning 4--20 seconds before and 3--15 seconds after the event. For candidate $I$, features $z_I$ include class, confidence, window lengths, nearby proposals, ball visibility, and player--ball association changes. A regularized logistic scorer predicts contextual sufficiency:
+\section{Computer-Vision Method}
+\textbf{Temporal proposals and decoding.} Video frames sampled at 2 FPS are represented by frozen ResNet-152 descriptors, reduced to 512 dimensions using the released PCA transform, and processed by pretrained CALF for 17 action classes. Each proposal is $(t_i,c_i,s_i)$: timestamp, class and confidence. A confidence-filtered proposal generates
 \begin{equation}
- q_\theta(I)=\sigma(\theta^\top z_I),\qquad
- \mathcal{L}=\mathrm{BCE}(q_\theta,y_I)+\lambda\|\theta\|_2^2.
+ I_i=[\max(0,t_i-b),\min(T,t_i+a)],
 \end{equation}
-Here $y_I$ is a human judgment that the clip contains the event and enough context to understand it. Training uses development matches; thresholds and regularization are selected on separate validation matches. All candidates from a match remain in one split. At inference, candidates are ranked by predicted quality with a duration penalty; overlaps are merged and final selections obey a fixed viewing budget. This constitutes a learned selection module beyond per-class threshold tuning.
+where $T$ is video duration. The default $b=8$ and $a=5$ seconds retain asymmetric context. Overlapping intervals are merged to avoid repeating footage. Users inspect the candidates before export; the fixed-window decoder provides a reproducible baseline.
 
-\textbf{Our Football Analytics module.} Player, referee and ball detection, ByteTrack association, jersey-color team assignment, and proximity-based ball-control estimation provide spatial evidence. Missing ball observations receive explicit missingness indicators rather than implied possession. Player positions additionally support an offside visualization cue; validating offside requires calibrated pitch geometry and the ball-contact instant. We will test whether these analytics improve context selection, rather than assume tracking accuracy guarantees better highlights.
+\textbf{Spatial evidence.} Football Analytics combines player/ball detections with ByteTrack~\cite{bytetrack} to provide trajectories, ball visibility and proximity-control cues. Missing ball observations remain explicit. The image-coordinate offside line supports geometric inspection, without establishing a rules-based offside decision.
 
-\section{Highlight Metric and Evaluation}
-For each target event $j$, annotators specify a sufficient-context interval $g_j$ and its class and timestamp. Let $\mathcal{C}$ be exported clips, $U$ their temporal union, and $G=\bigcup_jg_j$. Define contextual coverage $R$, temporal precision $P$, and supported-clip fraction $S$:
+\textbf{Calibration and learned extension.} The implemented calibrator supports class-threshold optimization by coordinate grid search over validation context F1. A proposed learnable selector, $q_\theta(I)=\sigma(\theta^\top z_I)$, would combine class, confidence, duration and tracking features, trained with regularized binary cross-entropy on human sufficiency labels. Match-separated splits would prevent overlapping-window leakage. Selector training remains future work.
+
+\section{Context-Based Evaluation}
+Annotators specify the shortest interval $g_j$ preserving each target event's build-up and outcome. Let $\mathcal C$ be the merged output clips, $G=\bigcup_jg_j$ and $U=\bigcup_{I\in\mathcal C}I$. Define
 \begin{equation}
- R=\frac{1}{N}\sum_j\max_{I\in\mathcal{C}}\frac{|I\cap g_j|}{|g_j|},
- \quad P=\frac{|U\cap G|}{|U|}.
+ R=\frac1N\sum_j\max_{I\in\mathcal C}\frac{|I\cap g_j|}{|g_j|},
+ \qquad P=\frac{|U\cap G|}{|U|}.
 \end{equation}
-A clip is supported if it contains an annotated event with a matching predicted class. Define \emph{Context Utility} as $H=S\,2PR/(P+R)$, with zero for empty output or zero denominator. Component scores reveal false clips, excess footage and truncated context. We also report complete-context rate and repeated footage. Comparisons use the same viewing budget.
+Coverage $R$ measures retained context; precision $P$ penalizes unrelated footage. The evaluator reports their harmonic mean, complete-context rate and redundancy. We additionally propose Context Utility $H=S\,2PR/(P+R)$, where $S$ is the fraction of clips containing a correctly labelled reference event; zero denominators yield zero. This evaluation applies automatically to any spotter given shared context annotations, which timestamp labels alone cannot supply.
 
-Once reference intervals are annotated, this calculation is automatic for any action spotter producing labeled clips. SoccerNet timestamps alone cannot provide true context intervals. A point-label-only proxy using fixed reference windows can be computed without new annotation, but must be reported separately because it encodes assumed context rather than human utility.
+\section{Decoder Sensitivity and Discussion}
+With saved CALF proposals fixed, we varied confidence threshold $\tau$ and context $(b,a)$, isolating decoder effects. Table~\ref{tab:decoder} reports reel duration and overlap removed relative to concatenating unmerged windows.
+\begin{center}
+\small
+\begin{tabular}{rrrrr}
+\toprule
+$\tau$ & $(b,a)$ [s] & Proposals & Reel [s] & Removed [s] \\
+\midrule
+0.05 & (4,3) & 2 & 11.5 & 2.5 \\
+0.05 & (8,5) & 2 & 17.5 & 8.5 \\
+0.20 & (8,5) & 1 & 13.0 & 0.0 \\
+0.05 & (12,8) & 2 & 21.5 & 15.5 \\
+\bottomrule
+\end{tabular}
+\refstepcounter{table}\label{tab:decoder}
+\par\smallskip Table \thetable: Local decoder sensitivity on saved event proposals.
+\end{center}
+At fixed confidence, padding increases duration from 11.5 to 21.5 seconds without adding proposals. Default merging reduces 26.0 seconds to 17.5 seconds: 32.7\% less repeated viewing, preserving the temporal union. Raising the threshold removes one proposal and 4.5 seconds. Thus padding, filtering and merging separately affect available context, accepted evidence and viewing cost.
 
-\section{Implementation and Pilot Runs}
-The released implementation is a local FastAPI/React application with a reproducible Docker Compose entry point. It packages the released CALF checkpoint, a local YOLO11 detector, video validation, background job status, duplicate-click locking, deterministic MP4 export, and an auditable pilot-result collector. Figure-free pilot runs confirm that the full pipeline executes on the supplied wide-pitch sample and a separate 17-second upload. On the supplied sample, cached Football Analytics tracks contain 20.4 players/frame, 35.1\% ball visibility, and 231 proximity-control frames. The uploaded clip completed YOLO11+ByteTrack tracking with 10.3 players/frame; its small/occluded ball was not detected (0\% visibility), so possession was not inferred. CALF produced low-confidence clearance and throw-in proposals on the short supplied sample, and the activity baseline produced three mergeable active-moment proposals. These are runtime and integration observations, \emph{not} labelled accuracy or highlight-quality results.
+Additional footage can contain either useful build-up or unrelated play; duration alone cannot measure highlight quality. These local sensitivity results establish decoder behaviour. Evaluating contextual sufficiency requires held-out interval annotations and equal viewing budgets.
 
-\section{Evaluation Protocol and Demonstration}
-The planned ablation compares global thresholds/fixed windows, class thresholds, learned selection using event features, and selection with Football Analytics features. Disjoint held-out matches will be assessed with Context Utility, spotting mAP, runtime, and reviewer agreement. The interactive demo shows event timelines, player--ball evidence, adjustable context, processing-state feedback, and ordered MP4 export. Evaluation will test whether learned selection improves completeness and concision under the same viewing budget.
+\textbf{Conclusion.} The interactive demo exposes event timelines, tracking overlays and MP4 reels. The next experiment compares fixed decoding and learned selection, with and without tracking features, using context scores at equal viewing duration.
 
-{\small\begin{thebibliography}{2}
+{\small\begin{thebibliography}{6}
 \bibitem{sn} A. Deli\`ege et al. SoccerNet-v2: A Dataset and Benchmarks for Holistic Understanding of Broadcast Soccer Videos. CVPRW, 2021.
 \bibitem{calf} A. Cioppa et al. A Context-Aware Loss Function for Action Spotting in Soccer Videos. CVPR, 2020.
+\bibitem{bytetrack} Y. Zhang et al. ByteTrack: Multi-Object Tracking by Associating Every Detection Box. ECCV, 2022.
+\bibitem{yolo} J. Redmon et al. You Only Look Once: Unified, Real-Time Object Detection. CVPR, 2016.
+\bibitem{netvlad} S. Giancola and B. Ghanem. \href{https://openaccess.thecvf.com/content/CVPR2021W/CVSports/papers/Giancola_Temporally-Aware_Feature_Pooling_for_Action_Spotting_in_Soccer_Broadcasts_CVPRW_2021_paper.pdf}{Temporally-Aware Feature Pooling for Action Spotting in Soccer Broadcasts}. CVPRW, 2021.
+\bibitem{actionformer} C.-L. Zhang, J. Wu, and Y. Li. \href{https://www.ecva.net/papers/eccv_2022/papers_ECCV/html/7278_ECCV_2022_paper.php}{ActionFormer: Localizing Moments of Actions with Transformers}. ECCV, 2022.
 \end{thebibliography}}
 \end{document}
