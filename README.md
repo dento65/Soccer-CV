@@ -89,3 +89,13 @@ The report proposes a learned context selector and Context Utility metric. The w
 - `demo/pitchclipers_walkthrough.mp4` - walkthrough video.
 - `../PitchClipers_Submission_FINAL_v2.zip` - complete upload-ready project package, including code, Docker setup, report source/PDF, local models, and the walkthrough MP4.
 # Soccer-CV
+
+## Redeploy on the EC2 demo instance
+
+After pushing changes to `main`, open **EC2 → Instances → pitchclipers-demo → Connect → EC2 Instance Connect**, then run:
+
+```bash
+sudo bash /opt/pitchclipers/deploy/redeploy-ec2.sh
+```
+
+The public URL remains the same while the instance is running. The Docker rebuild can take several minutes on the free-plan instance.
