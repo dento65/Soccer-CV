@@ -1,0 +1,37 @@
+{
+  "purpose": "Runtime and pipeline sanity checks, not labelled accuracy evaluation",
+  "runs": [
+    {
+      "video": "Untitled design.mp4",
+      "duration_sec": 17.0,
+      "source": "YOLO11 COCO detector + ByteTrack association",
+      "mean_players": 10.3,
+      "ball_visibility": 0.0,
+      "control_frames": 0
+    },
+    {
+      "video": "upload-test.mp4",
+      "duration_sec": 2.1,
+      "source": "YOLO11 COCO detector + ByteTrack association",
+      "mean_players": 7.3,
+      "ball_visibility": 0.0,
+      "control_frames": 0
+    },
+    {
+      "video": "Untitled design.mp4",
+      "duration_sec": 17.0,
+      "source": "YOLO11 COCO detector + ByteTrack association",
+      "mean_players": 10.3,
+      "ball_visibility": 0.0,
+      "control_frames": 0
+    },
+    {
+      "video": "Untitled design.mp4",
+      "duration_sec": 17.0,
+      "source": "YOLO11 COCO detector + ByteTrack association",
+      "mean_players": 10.3,
+      "ball_visibility": 0.0,
+      "control_frames": 0
+    }
+  ]
+}

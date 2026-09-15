@@ -1,0 +1,10 @@
+Upload `PitchClipers_Submission.zip` for the Interactive Demo assignment.
+
+The ZIP contains the short paper, runnable source code, released CALF checkpoint,
+supplied sample video, and setup/demo instructions in README.md.
+
+If the assignment text box is available, paste:
+"Attached is the runnable PitchClipers interactive-demo package. Start the local
+server following README.md, then open http://127.0.0.1:8000. The demo supports
+pretrained SoccerNet event spotting, interactive clip selection, MP4 export, and
+Football Analytics tracking evidence."

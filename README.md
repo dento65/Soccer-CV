@@ -87,5 +87,5 @@ The report proposes a learned context selector and Context Utility metric. The w
 
 - `output/pdf/pitchclipers_report.pdf` - short paper.
 - `demo/pitchclipers_walkthrough.mp4` - walkthrough video.
-- `PitchClipers_Submission_READY_v2.zip` - earlier package; rebuild the archive after local edits if submitting this latest version.
+- `../PitchClipers_Submission_FINAL_v2.zip` - complete upload-ready project package, including code, Docker setup, report source/PDF, local models, and the walkthrough MP4.
 # Soccer-CV

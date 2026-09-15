@@ -1,0 +1,130 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[a4paper,top=1.25cm,bottom=1.25cm,left=1.35cm,right=1.35cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[scaled=0.94]{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{multicol}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2pt}
+\setlength{\columnsep}{0.72cm}
+\setlist[itemize]{leftmargin=1.25em,itemsep=0pt,topsep=2pt,parsep=0pt,partopsep=0pt}
+\setlist[enumerate]{leftmargin=1.35em,itemsep=0pt,topsep=2pt,parsep=0pt,partopsep=0pt}
+
+\newcommand{\sectiontitle}[1]{%
+  \vspace{4pt}\par{\fontsize{15}{17}\selectfont\bfseries #1}\par\vspace{3pt}%
+}
+\newcommand{\subsectiontitle}[1]{%
+  \vspace{2pt}\par{\fontsize{11.5}{13}\selectfont\bfseries #1}\par\vspace{1pt}%
+}
+
+\begin{document}
+
+{\fontsize{20}{22}\selectfont\bfseries Research Proposal}\par
+{\fontsize{14}{16}\selectfont\bfseries (Resource-Efficient Football Highlight Generation)}
+
+\vspace{5pt}
+\begin{multicols}{2}
+\raggedright
+
+\sectiontitle{Chosen Domain}
+
+\textbf{Multimodal AI Systems -- Video Scene Understanding.}
+The project focuses on understanding long football broadcasts by detecting semantically meaningful events and presenting them as short, labeled highlight clips. The visual stream is represented by released deep features, while model predictions provide event labels, timestamps, and confidence scores.
+
+\sectiontitle{Problem Statement}
+
+A football match contains only a small number of important events within more than 90 minutes of video. Manually finding goals, shots, fouls, cards, penalties, and set pieces is time-consuming. Training a modern end-to-end video model is also impractical with the available 16\,GB GPUs and limited shared storage. The challenge is therefore to obtain accurate temporal event spots and convert them into useful clips without training a large video backbone.
+
+\sectiontitle{Motivation}
+
+\begin{itemize}
+  \item Automatic event spotting can reduce the time needed to review complete matches.
+  \item Released visual features avoid repeatedly decoding videos and training an expensive feature extractor.
+  \item A pretrained model makes the project feasible on one RTX~4080 workstation.
+  \item Class-specific filtering and clip generation connect a research benchmark to a practical application.
+  \item The system can support coaches, analysts, media editors, and football fans.
+\end{itemize}
+
+\sectiontitle{Research Question}
+
+\textbf{Can a pretrained, feature-based SoccerNet-v2 action-spotting model generate accurate and useful event-centered football highlight clips under limited computational resources, and how do class-specific confidence thresholds affect precision and event coverage?}
+
+\sectiontitle{Dataset or Data Source}
+
+\textbf{Dataset: SoccerNet-v2 Action Spotting\textsuperscript{[1]}}
+
+\subsectiontitle{Released Data}
+\begin{itemize}
+  \item 500 complete football matches with timestamp annotations for 17 event classes.
+  \item Released ResNet/PCA512 visual features and official train, validation, and test splits.
+  \item Primary highlight classes: goals, penalties, shots on/off target, fouls, and cards.
+  \item Secondary classes: corners, free kicks, offsides, and substitutions.
+  \item Validation data will calibrate thresholds; the official test split will be used for final evaluation.
+\end{itemize}
+
+\columnbreak
+
+\sectiontitle{Planned Method}
+
+\subsectiontitle{Base Model}
+\begin{itemize}
+  \item Pretrained \href{https://github.com/yahoo/spivak}{Yahoo Spivak} action-spotting model for SoccerNet-v2.\textsuperscript{[2,3]}
+  \item Resource-efficient ResNet or PCA512 feature variant rather than the large multi-feature ensemble.
+\end{itemize}
+
+\subsectiontitle{Main Idea}
+\begin{itemize}
+  \item Process one match at a time and predict \textit{event class, timestamp, confidence}.
+  \item Compare one global confidence threshold with thresholds calibrated separately for each event class.
+  \item Keep highlight-relevant events and suppress routine events such as throw-ins and clearances by default.
+  \item Convert point predictions into event-specific windows, for example longer context around goals and penalties.
+  \item Merge temporally overlapping detections, such as a shot followed immediately by a goal, into one coherent clip.
+\end{itemize}
+
+\subsectiontitle{Evaluation}
+\begin{itemize}
+  \item Standard action-spotting metrics: tight/loose average-mAP and per-class AP.
+  \item Application metrics: clip precision, important-event coverage, duplicate rate, processing time, and peak memory.
+  \item Qualitative analysis of successful clips, missed events, and false detections.
+\end{itemize}
+
+\sectiontitle{Expected Outcome}
+
+\begin{itemize}
+  \item A reproducible pipeline that detects several important football event types from released visual features.
+  \item Labeled, event-centered highlight candidates rather than a fully edited professional broadcast summary.
+  \item Evidence showing whether per-class calibration improves the balance between precise clips and event coverage.
+  \item Offline processing that fits one workstation with an RTX~4080 (16\,GB VRAM) and 32\,GB RAM.
+  \item An analysis of weaker classes, especially rare events, and the practical limitations of feature-based spotting.
+\end{itemize}
+
+\sectiontitle{Planned Interactive Demo Idea}
+
+Create a React-based webpage where users can:
+\begin{enumerate}
+  \item Select a prepared football match or compatible video/feature pair.
+  \item Run or load pretrained action-spotting predictions.
+  \item View detected events on an interactive match timeline.
+  \item Filter by event class and adjust the confidence threshold.
+  \item Preview the event-centered clips and inspect confidence scores.
+  \item Select, reorder, and export individual clips or a merged highlight video.
+\end{enumerate}
+
+\end{multicols}
+
+\vspace{1pt}
+{\fontsize{7}{8.1}\selectfont
+\textbf{References}\par
+\textsuperscript{[1]} A. Deli\`ege et al., \href{https://openaccess.thecvf.com/content/CVPR2021W/CVSports/html/Deliege_SoccerNet-v2_A_Dataset_and_Benchmarks_for_Holistic_Understanding_of_Broadcast_CVPRW_2021_paper.html}{``SoccerNet-v2: A Dataset and Benchmarks for Holistic Understanding of Broadcast Soccer Videos,''} CVPRW, 2021.\\
+\textsuperscript{[2]} J. V. B. Soares, A. Shah, and T. Biswas, \href{https://arxiv.org/abs/2205.10450}{``Temporally Precise Action Spotting in Soccer Videos Using Dense Detection Anchors,''} 2022.\\
+\textsuperscript{[3]} J. V. B. Soares and A. Shah, \href{https://arxiv.org/abs/2206.07846}{``Action Spotting Using Dense Detection Anchors Revisited,''} SoccerNet Challenge, 2022.\\
+\textsuperscript{[4]} A. Cioppa et al., \href{https://openaccess.thecvf.com/content_CVPR_2020/html/Cioppa_A_Context-Aware_Loss_Function_for_Action_Spotting_in_Soccer_Videos_CVPR_2020_paper.html}{``A Context-Aware Loss Function for Action Spotting in Soccer Videos,''} CVPR, 2020.\\
+\textsuperscript{[5]} S. Giancola and B. Ghanem, \href{https://openaccess.thecvf.com/content/CVPR2021W/CVSports/html/Giancola_Temporally-Aware_Feature_Pooling_for_Action_Spotting_in_Soccer_Broadcasts_CVPRW_2021_paper.html}{``Temporally-Aware Feature Pooling for Action Spotting in Soccer Broadcasts,''} CVPRW, 2021.
+}
+\end{document}

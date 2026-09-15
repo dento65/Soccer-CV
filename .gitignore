@@ -1,0 +1,28 @@
+node_modules/
+dist/
+local_data/
+model_outputs/
+tmp/
+__pycache__/
+*.pyc
+*.log
+.env
+!.env.example
+.DS_Store
+# Runtime files and hand-in artifacts
+data/*
+!data/sample.mp4
+output/
+*.zip
+tmp-*.png
+*.mp4.tmp
+# Build artifacts
+node_modules/
+dist/
+.venv/
+# Temporary downloaded upstream worktrees
+third_party/**/.git/
+# Redundant local detector download (the deployable copy is models/yolo11n.pt)
+/yolo11n.pt
+# CALF regenerates these outputs on each inference job
+third_party/sn-spotting/Benchmarks/CALF/inference/outputs/
