@@ -1,5 +1,15 @@
 # PitchClipers Agent Handoff
 
+## 2026-09-16 implementation update
+
+- The local app at `http://127.0.0.1:8000` now runs the rebuilt policy-oriented interface. Browser verification covered sample loading, active-moment inference, duration-budget policy change, locked controls, completion dialog and MP4 export.
+- `backend/engine.py` has asymmetric/symmetric windows, a deterministic overlap-aware duration-budget policy, provenance and validated context metrics. `backend/test_engine.py` supplies regression coverage.
+- CALF's fixed upstream output path is serialized. Tracking and export use the asynchronous job lifecycle, reject concurrent match operations, and expose cache behavior. The tracking cache-return bug is fixed.
+- Overlay labels nearest-player proximity and screen-space position. They must not be described as possession or offside decisions.
+- Real artifacts are in `evaluation/decoder_sweep.{json,csv}`. A fresh `VIDEO.MP4` tracking run took 107.352 seconds for 750 frames, with 6.2 mean players per sampled frame and ball evidence in 1/750 frames. `scripts/run_experiments.py` rebuilds the decoder sweep.
+- Presentation deliverables are in `presentation/`, including `PitchClipers_CV_Presentation.pptx`, notes, demo script and Q&A. The deck was structurally validated and rendered for visual review.
+- `report/paper.tex` has been revised with recorded evidence. This host has no TeX compiler and its Docker daemon is unavailable, so regenerate the PDF on an environment with TeX before treating the existing PDF as current.
+
 **Project:** PitchClipers / Soccer-CV  
 **Repository:** https://github.com/dento65/Soccer-CV  
 **Current commit:** `67bac08` — `Polish upload guidance and highlight results`  
@@ -324,4 +334,3 @@ Prioritize in this order if there is more time:
 - Keep uploads short in the visible guidance. Thirty seconds is a UX recommendation for the constrained demo server, not the backend's hard file-duration limit.
 - Check `calf.log` before changing CALF code when event spotting fails.
 - Preserve data before replacing the production container. The current server uses a mounted host directory for this purpose.
-

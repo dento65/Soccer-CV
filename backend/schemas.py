@@ -7,6 +7,8 @@ class ClipPolicy(BaseModel):
     after: float = Field(5, ge=0, le=60)
     classes: list[str] | None = None
     thresholds: dict[str, float] | None = None
+    policy: str = Field('asymmetric', pattern='^(asymmetric|symmetric|budget)$')
+    budget_seconds: float | None = Field(None, gt=0, le=600)
 
 class ExportRequest(BaseModel):
     clips: list[dict] = Field(min_length=1, max_length=100)

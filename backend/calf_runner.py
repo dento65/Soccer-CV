@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,11 @@ PYTHON = ROOT / ".venv" / "bin" / "python"
 if not PYTHON.exists():
     PYTHON = Path(sys.executable)
 CHECKPOINT = CALF / "models" / "CALF_benchmark" / "model.pth.tar"
+# The released external-video script writes its prediction JSON at a fixed path.
+# Protect deletion, inference, and reading as one critical section. This keeps
+# different uploaded matches from reading one another's predictions in this
+# single-process FastAPI deployment.
+_INFERENCE_LOCK = threading.Lock()
 
 
 def available() -> tuple[bool, str]:
@@ -36,23 +42,22 @@ def infer(video: Path, destination: Path) -> list[dict]:
     work.mkdir(parents=True, exist_ok=True)
     # The upstream inference writes fixed paths. Isolate one inference at a time
     # by running inside its release directory and moving the final artifact.
-    output_dir = CALF / "inference" / "outputs"
-    # The released CALF script writes temporary video/features here. Create it
-    # on fresh Docker/Git checkouts before launching FFmpeg.
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output = output_dir / "Predictions-v2.json"
-    output.unlink(missing_ok=True)
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(CALF.parent.parent.parent) + os.pathsep + env.get("PYTHONPATH", "")
-    command = [str(PYTHON), "inference/main.py", "--video_path", str(video), "--model_name", "CALF_benchmark"]
-    result = subprocess.run(command, cwd=CALF, env=env, capture_output=True, text=True, timeout=7200)
-    (work / "calf.log").write_text((result.stdout or "") + "\n" + (result.stderr or ""))
-    if result.returncode != 0:
-        raise RuntimeError(f"CALF inference failed. See {work / 'calf.log'}")
-    if not output.exists():
-        raise RuntimeError("CALF finished without Predictions-v2.json")
-    shutil.copy2(output, work / "Predictions-v2.json")
-    payload = json.loads(output.read_text())
+    with _INFERENCE_LOCK:
+        output_dir = CALF / "inference" / "outputs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output = output_dir / "Predictions-v2.json"
+        output.unlink(missing_ok=True)
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(CALF.parent.parent.parent) + os.pathsep + env.get("PYTHONPATH", "")
+        command = [str(PYTHON), "inference/main.py", "--video_path", str(video), "--model_name", "CALF_benchmark"]
+        result = subprocess.run(command, cwd=CALF, env=env, capture_output=True, text=True, timeout=7200)
+        (work / "calf.log").write_text((result.stdout or "") + "\n" + (result.stderr or ""))
+        if result.returncode != 0:
+            raise RuntimeError(f"CALF inference failed. See {work / 'calf.log'}")
+        if not output.exists():
+            raise RuntimeError("CALF finished without Predictions-v2.json")
+        shutil.copy2(output, work / "Predictions-v2.json")
+        payload = json.loads(output.read_text())
     events = []
     for index, item in enumerate(payload.get("predictions", [])):
         events.append({

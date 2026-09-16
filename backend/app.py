@@ -8,12 +8,12 @@ from ultralytics import YOLO
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from .engine import clips, normalize, evaluate, fit
+from .engine import clips, normalize, evaluate, fit, interval_seconds
 from .calf_runner import available as calf_available, infer as calf_infer
 from .config import ROOT, DATA_DIR, MAX_UPLOAD_BYTES, MAX_VIDEO_SECONDS
 from .schemas import ClipPolicy, ExportRequest, PredictionImport, EvaluationRequest
 DATA=DATA_DIR; DATA.mkdir(exist_ok=True)
-app=FastAPI(title='PitchClipers',version='1.0.0'); pool=ThreadPoolExecutor(max_workers=2); jobs={}
+app=FastAPI(title='PitchClipers',version='1.1.0'); pool=ThreadPoolExecutor(max_workers=2); jobs={}
 LIVE_TRACKER_WEIGHTS=ROOT/'models'/'yolo11n.pt'
 
 def run(args):
@@ -37,6 +37,20 @@ def folder(mid):
 def read(mid): return json.loads((folder(mid)/'match.json').read_text())
 def save(p,m):
     temp=p/'match.tmp'; temp.write_text(json.dumps(m)); temp.replace(p/'match.json')
+def active_job(mid, stage=None):
+    return next((jid for jid, job in jobs.items() if job.get('match_id')==mid and job['status']=='running' and (stage is None or job.get('operation')==stage)), None)
+def start_job(mid, operation, stage):
+    existing=active_job(mid)
+    if existing: raise HTTPException(409, {'message':'Another operation is already running for this video', 'job_id':existing})
+    jid=uuid.uuid4().hex
+    jobs[jid]=dict(status='running',progress=0,match_id=mid,operation=operation,stage=stage,started_at=time.time())
+    return jid
+def finish_job(jid, **values):
+    started=jobs[jid].get('started_at', time.time())
+    jobs[jid].update(status='complete',progress=100,elapsed_seconds=round(time.time()-started,3),**values)
+def fail_job(jid, error):
+    started=jobs[jid].get('started_at', time.time())
+    jobs[jid].update(status='failed',error=str(error),elapsed_seconds=round(time.time()-started,3))
 def create(path,name):
     duration=probe(path); mid=uuid.uuid4().hex; p=DATA/mid; p.mkdir(); shutil.move(str(path),p/'source.mp4')
     m=dict(id=mid,name=name,duration=duration,events=[],source='Not analyzed',video_url=f'/api/matches/{mid}/video'); save(p,m); return m
@@ -90,30 +104,28 @@ def analyze(mid,jid):
             if all(abs(t-r['timestamp_sec'])>=6 for r in selected): selected.append(dict(event_id=f'a{i}',timestamp_sec=t,class_id='activity',confidence=round(float(scores[i]),4)))
             if len(selected)>=100: break
         m.update(events=sorted(selected,key=lambda e:e['timestamp_sec']),source='Frame-difference activity baseline · not semantic event predictions',analysis_seconds=round(time.perf_counter()-started,3),signal=[round(float(v),3) for v in scores]); save(p,m)
-        jobs[jid].update(status='complete',progress=100,result=m)
-    except Exception as e: jobs[jid].update(status='failed',error=str(e))
+        finish_job(jid,result=m)
+    except Exception as e: fail_job(jid,e)
 @app.post('/api/matches/{mid}/analyze')
 def start(mid:str):
     folder(mid)
-    if any(j.get('match_id')==mid and j['status']=='running' for j in jobs.values()): raise HTTPException(409,'Analysis already running')
-    jid=uuid.uuid4().hex; jobs[jid]=dict(status='running',progress=0,match_id=mid); pool.submit(analyze,mid,jid); return {'job_id':jid}
+    jid=start_job(mid,'motion','Queued non-semantic motion analysis'); pool.submit(analyze,mid,jid); return {'job_id':jid}
 
 def spot_with_calf(mid, jid):
     try:
-        p=folder(mid); m=read(mid); jobs[jid].update(progress=5,stage='Extracting ResNet-152 visual features')
+        p=folder(mid); m=read(mid); jobs[jid].update(progress=5,stage='CALF inference: extracting visual features')
         events=calf_infer(p/'source.mp4', p)
         jobs[jid].update(progress=95,stage='Writing 17-class SoccerNet predictions')
-        m.update(events=events, source='SoccerNet CALF benchmark: ResNet-152 features + context-aware action spotting', model='CALF_benchmark')
-        save(p,m); jobs[jid].update(status='complete',progress=100,result=m)
-    except Exception as e: jobs[jid].update(status='failed',error=str(e))
+        m.update(events=events, source='SoccerNet CALF benchmark: ResNet-152 features + context-aware action spotting', model='CALF_benchmark', model_config={'checkpoint':'CALF_benchmark','upstream_output':'serialized shared release output'})
+        save(p,m); finish_job(jid,result=m)
+    except Exception as e: fail_job(jid,e)
 
 @app.post('/api/matches/{mid}/spot')
 def spot(mid:str):
     folder(mid)
     ready, detail=calf_available()
     if not ready: raise HTTPException(503,detail)
-    if any(j.get('match_id')==mid and j['status']=='running' for j in jobs.values()): raise HTTPException(409,'Another analysis is already running')
-    jid=uuid.uuid4().hex; jobs[jid]=dict(status='running',progress=0,match_id=mid,stage='Queued official CALF inference'); pool.submit(spot_with_calf,mid,jid); return {'job_id':jid,'model':'SoccerNet CALF benchmark'}
+    jid=start_job(mid,'calf','Queued official CALF inference'); pool.submit(spot_with_calf,mid,jid); return {'job_id':jid,'model':'SoccerNet CALF benchmark'}
 
 def legacy_tracker_summary(mid):
     """Reuse the supplied Football Analytics ByteTrack result for its supplied sample."""
@@ -133,7 +145,7 @@ def legacy_tracker_summary(mid):
         if line is not None: offside_frames += 1
         if owner is not None: possession.append(owner)
         frames.append({'time_sec':round(i/fps,2),'players':len(frame),'referees':len(tracks['referees'][i]),'ball_visible':bool(ball),'ball_owner':owner,'offside_line_x':line})
-    return {'source':'Football Analytics ByteTrack detections for the supplied sample', 'frame_count':len(frames), 'fps':round(fps,2), 'mean_players':round(float(np.mean([x['players'] for x in frames])),1), 'ball_visibility':round(float(np.mean([x['ball_visible'] for x in frames])),3), 'control_frames':len(possession), 'offside_cue_frames':offside_frames, 'samples':frames[::max(1,len(frames)//30)]}
+    return {'source':'Football Analytics ByteTrack detections for the supplied sample', 'frame_count':len(frames), 'fps':round(fps,2), 'mean_players':round(float(np.mean([x['players'] for x in frames])),1), 'ball_visibility':round(float(np.mean([x['ball_visible'] for x in frames])),3), 'control_frames':len(possession), 'screen_position_guide_frames':offside_frames, 'samples':frames[::max(1,len(frames)//30)], 'limitations':'Nearest-player control is a proximity cue. The screen-position guide is not an offside decision.'}
 
 def box_center(box):
     return ((float(box[0])+float(box[2]))/2, (float(box[1])+float(box[3]))/2)
@@ -149,7 +161,7 @@ def owner_for_ball(players, ball):
     return best[1] if best[0] < 150 else None
 
 def offside_line(players):
-    """Second-deepest player x-coordinate: visualization cue, not a Laws decision."""
+    """Second right-most screen coordinate: a visual guide, not an offside call."""
     xs=sorted((box_center(item['bbox'])[0] for item in players.values()), reverse=True)
     return round(xs[1],1) if len(xs) >= 2 else None
 
@@ -178,19 +190,20 @@ def render_tracking_video(mid):
             if ball:
                 x1,y1,x2,y2=map(int,ball); cv2.rectangle(frame,(x1,y1),(x2,y2),(50,130,255),3); cv2.putText(frame,'BALL',(x1,max(22,y1-7)),cv2.FONT_HERSHEY_SIMPLEX,.5,(50,130,255),2,cv2.LINE_AA)
             if line is not None:
-                x=int(line); cv2.line(frame,(x,0),(x,height),(64,85,255),2); cv2.putText(frame,'OFFSIDE LINE (cue)',(min(x+8,width-240),35),cv2.FONT_HERSHEY_SIMPLEX,.65,(64,85,255),2,cv2.LINE_AA)
+                x=int(line); cv2.line(frame,(x,0),(x,height),(64,85,255),2); cv2.putText(frame,'SCREEN POSITION GUIDE',(min(x+8,width-310),35),cv2.FONT_HERSHEY_SIMPLEX,.65,(64,85,255),2,cv2.LINE_AA)
             cv2.rectangle(frame,(14,height-55),(580,height-14),(14,20,34),-1)
-            cv2.putText(frame,'Player / ball tracking | green = ball control | red = geometric offside line',(26,height-28),cv2.FONT_HERSHEY_SIMPLEX,.55,(255,255,255),1,cv2.LINE_AA)
+            cv2.putText(frame,'Player / ball tracking | green = proximity-control cue | red = screen-position guide',(26,height-28),cv2.FONT_HERSHEY_SIMPLEX,.46,(255,255,255),1,cv2.LINE_AA)
             writer.write(frame); index += 1
     finally:
         cap.release(); writer.release()
     run(['ffmpeg','-v','error','-y','-i',str(temp),'-c:v','libx264','-preset','veryfast','-crf','22','-pix_fmt','yuv420p','-movflags','+faststart',str(output)])
     temp.unlink(missing_ok=True); return output
 
-def render_live_tracking_video(mid):
+def render_live_tracking_video(mid, progress=None):
     """Run a packaged YOLO11 detector and ByteTrack association on any uploaded video."""
     p=folder(mid); output=p/'tracking_overlay.mp4'
-    if output.exists(): return output
+    cached=p/'live_tracking.json'
+    if output.exists() and cached.exists(): return output, json.loads(cached.read_text())
     if not LIVE_TRACKER_WEIGHTS.exists():
         raise ValueError('YOLO11 detector weights are missing from models/yolo11n.pt')
     cap=cv2.VideoCapture(str(p/'source.mp4'))
@@ -216,16 +229,18 @@ def render_live_tracking_video(mid):
             if ball_box:
                 x1,y1,x2,y2=map(int,ball_box); cv2.rectangle(frame,(x1,y1),(x2,y2),(50,130,255),3); cv2.putText(frame,'BALL',(x1,max(22,y1-7)),cv2.FONT_HERSHEY_SIMPLEX,.5,(50,130,255),2,cv2.LINE_AA)
             if line is not None:
-                x=int(line); cv2.line(frame,(x,0),(x,height),(64,85,255),2); cv2.putText(frame,'OFFSIDE LINE (cue)',(min(x+8,width-240),35),cv2.FONT_HERSHEY_SIMPLEX,.65,(64,85,255),2,cv2.LINE_AA)
-            cv2.rectangle(frame,(14,height-55),(660,height-14),(14,20,34),-1); cv2.putText(frame,'YOLO11 + ByteTrack | green = ball control | red = geometric offside line',(26,height-28),cv2.FONT_HERSHEY_SIMPLEX,.55,(255,255,255),1,cv2.LINE_AA)
+                x=int(line); cv2.line(frame,(x,0),(x,height),(64,85,255),2); cv2.putText(frame,'SCREEN POSITION GUIDE',(min(x+8,width-310),35),cv2.FONT_HERSHEY_SIMPLEX,.65,(64,85,255),2,cv2.LINE_AA)
+            cv2.rectangle(frame,(14,height-55),(700,height-14),(14,20,34),-1); cv2.putText(frame,'YOLO11 + ByteTrack | green = proximity-control cue | red = screen-position guide',(26,height-28),cv2.FONT_HERSHEY_SIMPLEX,.46,(255,255,255),1,cv2.LINE_AA)
             writer.write(frame)
             if frame_number % max(1,int(fps))==0: samples.append({'time_sec':round(frame_number/fps,2),'players':len(players),'ball_visible':bool(ball_box),'ball_owner':owner,'offside_line_x':line})
             frame_number+=1
+            if progress and frame_number % max(1, int(fps * 2)) == 0:
+                progress(min(90, 15 + int(75 * frame_number / total)))
     finally:
         cap.release(); writer.release()
     run(['ffmpeg','-v','error','-y','-i',str(temp),'-c:v','libx264','-preset','veryfast','-crf','22','-pix_fmt','yuv420p','-movflags','+faststart',str(output)])
     temp.unlink(missing_ok=True)
-    return output, {'source':'YOLO11 COCO detector + ByteTrack association', 'frame_count':frame_number, 'fps':round(fps,2), 'mean_players':round(float(np.mean([x['players'] for x in samples])) if samples else 0,1), 'ball_visibility':round(visible/max(frame_number,1),3), 'control_frames':control, 'offside_cue_frames':sum(x['offside_line_x'] is not None for x in samples), 'samples':samples}
+    return output, {'source':'YOLO11 COCO detector + ByteTrack association', 'frame_count':frame_number, 'fps':round(fps,2), 'mean_players':round(float(np.mean([x['players'] for x in samples])) if samples else 0,1), 'ball_visibility':round(visible/max(frame_number,1),3), 'control_frames':control, 'screen_position_guide_frames':sum(x['offside_line_x'] is not None for x in samples), 'samples':samples, 'limitations':'Ball absence is unknown, not zero possession. The screen-position guide is not an offside decision.'}
 
 @app.get('/api/matches/{mid}/analytics')
 def analytics(mid:str):
@@ -233,16 +248,27 @@ def analytics(mid:str):
     if live.exists(): return json.loads(live.read_text())
     try: return legacy_tracker_summary(mid)
     except ValueError as e: raise HTTPException(400,str(e))
-@app.post('/api/matches/{mid}/tracking-video')
-def tracking_video(mid:str):
+
+def tracking_worker(mid, jid):
     try:
+        jobs[jid].update(progress=5,stage='Loading detector and video')
         if read(mid)['name'] == 'Training ground · supplied sample':
             render_tracking_video(mid)
+            result=legacy_tracker_summary(mid)
         else:
-            _, result=render_live_tracking_video(mid)
+            jobs[jid].update(progress=15,stage='Detecting players and ball with YOLO11')
+            _, result=render_live_tracking_video(mid, lambda value: jobs[jid].update(progress=value,stage='Detecting players and ball with YOLO11'))
             (folder(mid)/'live_tracking.json').write_text(json.dumps(result))
-        return {'video_url':f'/api/matches/{mid}/tracking-video/file'}
-    except ValueError as e: raise HTTPException(400,str(e))
+        jobs[jid].update(progress=95,stage='Writing tracking overlay')
+        finish_job(jid,result={'video_url':f'/api/matches/{mid}/tracking-video/file','analytics':result})
+    except Exception as e: fail_job(jid,e)
+
+@app.post('/api/matches/{mid}/tracking-video')
+def tracking_video(mid:str):
+    folder(mid)
+    jid=start_job(mid,'tracking','Queued player and ball tracking')
+    pool.submit(tracking_worker,mid,jid)
+    return {'job_id':jid}
 @app.get('/api/matches/{mid}/tracking-video/file')
 def tracking_video_file(mid:str):
     path=folder(mid)/'tracking_overlay.mp4'
@@ -260,7 +286,21 @@ def predictions(mid:str,body:PredictionImport):
     save(folder(mid),m); return m
 @app.post('/api/matches/{mid}/clips')
 def candidates(mid:str,body:ClipPolicy):
-    m=read(mid); return clips(m['events'],m['duration'],**body.model_dump())
+    m=read(mid)
+    if body.policy == 'budget' and body.budget_seconds is None:
+        raise HTTPException(400,'A duration budget is required for budgeted selection')
+    rows=clips(m['events'],m['duration'],**body.model_dump())
+    live=folder(mid)/'live_tracking.json'
+    if live.exists():
+        samples=json.loads(live.read_text()).get('samples',[])
+        for row in rows:
+            local=[sample for sample in samples if row['start_sec']<=sample['time_sec']<=row['end_sec']]
+            if local:
+                row['spatial_evidence']={'sample_count':len(local),'mean_players':round(float(np.mean([sample['players'] for sample in local])),1),'ball_visible_fraction':round(float(np.mean([sample['ball_visible'] for sample in local])),3),'control_cue_samples':sum(sample['ball_owner'] is not None for sample in local)}
+    raw_windows=[(max(0,event['timestamp_sec']-body.before),min(m['duration'],event['timestamp_sec']+ (body.before if body.policy=='symmetric' else body.after))) for row in rows for event in row['events']]
+    union_seconds=interval_seconds([(row['start_sec'],row['end_sec']) for row in rows])
+    raw_seconds=sum(end-start for start,end in raw_windows)
+    return {'policy':body.policy,'budget_seconds':body.budget_seconds,'clips':rows,'union_seconds':round(union_seconds,3),'raw_window_seconds':round(raw_seconds,3),'redundant_seconds_removed':round(raw_seconds-union_seconds,3)}
 @app.post('/api/matches/{mid}/evaluate')
 def evaluation(mid:str,body:EvaluationRequest):
     try: return evaluate(body.clips,body.references,read(mid)['duration'])
@@ -277,8 +317,8 @@ def export_worker(mid,jid,rows):
         (work/'list.txt').write_text('\n'.join(f"file '{i}.mp4'" for i in range(len(rows))))
         run(['ffmpeg','-v','error','-y','-f','concat','-safe','0','-i',str(work/'list.txt'),'-c','copy','-movflags','+faststart',str(work/'highlights.mp4')])
         (work/'manifest.json').write_text(json.dumps({'match_id':mid,'source':read(mid)['source'],'clips':rows},indent=2))
-        jobs[jid].update(status='complete',progress=100,url=f'/api/matches/{mid}/exports/{jid}')
-    except Exception as e: jobs[jid].update(status='failed',error=str(e))
+        finish_job(jid,url=f'/api/matches/{mid}/exports/{jid}')
+    except Exception as e: fail_job(jid,e)
 @app.post('/api/matches/{mid}/export')
 def export(mid:str,body:ExportRequest):
     m=read(mid)
@@ -286,7 +326,7 @@ def export(mid:str,body:ExportRequest):
         for c in body.clips:
             if not 0<=float(c['start_sec'])<float(c['end_sec'])<=m['duration']: raise ValueError('Invalid clip boundaries')
     except (KeyError,ValueError,TypeError) as e: raise HTTPException(400,str(e))
-    jid=uuid.uuid4().hex; jobs[jid]=dict(status='running',progress=0); pool.submit(export_worker,mid,jid,body.clips); return {'job_id':jid}
+    jid=start_job(mid,'export','Queued MP4 highlight export'); pool.submit(export_worker,mid,jid,body.clips); return {'job_id':jid}
 @app.get('/api/matches/{mid}/exports/{jid}')
 def download(mid:str,jid:str):
     if len(jid)!=32 or any(c not in '0123456789abcdef' for c in jid): raise HTTPException(404)

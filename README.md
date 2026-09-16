@@ -23,7 +23,7 @@ Watch [the 16-second walkthrough](demo/pitchclipers_walkthrough.mp4): upload a s
 1. **Upload a video** - guidance beside the upload button and in the popup recommends MP4 broadcast clips under 30 seconds, captured from a wide pitch view.
 2. **Find football events (CALF)** - runs the released SoccerNet CALF action-spotting pipeline: ResNet-152 descriptors, PCA-512, and 17 action classes.
 3. **Detect players + ball** - applies YOLO11 COCO detections and ByteTrack association on uploads, then renders a player/ball tracking overlay.
-4. **Build a highlight reel** - creates event-centred windows, merges overlap, lets the user edit context, and exports the chosen clips to one MP4.
+4. **Build a highlight reel** - compares asymmetric and symmetric context windows, or a duration-budgeted greedy policy. It merges overlap, shows selection provenance, lets the user select clips, and exports one MP4.
 
 The full-screen processing state locks controls during a job, preventing duplicate inference or export requests.
 
@@ -46,13 +46,13 @@ Requirements: Python 3.11, Node 20+, FFmpeg. The CALF feature extractor download
 backend/
   app.py               FastAPI routes and job lifecycle
   calf_runner.py       Adapter for released SoccerNet CALF inference
-  engine.py            Detector-independent clip construction and Context Utility
+  engine.py            Detector-independent policies and context evaluation
   config.py            Runtime paths and resource limits
   schemas.py           Validated API request models
   services/
     experiments.py     Pilot-run result collection
 scripts/
-  collect_pilot_results.py  Rebuilds experiments/pilot_runs.json
+  run_experiments.py        Rebuilds decoder-sensitivity CSV/JSON from saved runs
 demo/
   pitchclipers_walkthrough.mp4
 models/yolo11n.pt      Local YOLO11 detector
@@ -62,25 +62,26 @@ report/                CVPR short-paper source
 output/pdf/             Final report PDF
 ```
 
-## Pilot runs and evidence
+## Reproducible decoder evidence
 
 Run the auditable pilot collector after using the app:
 
 ```bash
-PYTHONPATH=. python scripts/collect_pilot_results.py
+./.venv/bin/python scripts/run_experiments.py
 ```
 
-It writes `experiments/pilot_runs.json` from completed local tracking runs. The collected fields are runtime/pipeline sanity checks, not accuracy claims. The supplied wide-pitch sample produced cached Football Analytics tracks with 20.4 players/frame, 35.1% ball visibility, and 231 ball-control-cue frames. On the 17-second uploaded `Untitled design.mp4`, the local YOLO11+ByteTrack path completed with 10.3 players/frame; the ball was not detected, which is recorded as 0% visibility rather than inferred possession.
+It writes `evaluation/decoder_sweep.csv` and `evaluation/decoder_sweep.json` from completed named local runs. The script reuses saved proposal outputs and sweeps only the implemented decoder. It records proposal count, union duration and overlap removed. Those are decoder and system measurements, not event-spotting accuracy or human highlight-quality claims.
 
 ## Research scope and limits
 
-The report proposes a learned context selector and Context Utility metric. The working demo provides pretrained event proposals and an interactive baseline decoder. The red offside line is a **geometric visual cue**, not a Laws-of-the-Game offside decision: a validated decision needs calibrated pitch coordinates, team assignment, attacking direction, and the pass instant. COCO ball detection can miss small or occluded broadcast balls, so missing ball detections remain explicit.
+The working demo provides pretrained event proposals and an interactive decoder. A human-context annotation workflow and a learned selector require independent labelled data and match-separated validation; they are not presented as completed model-training results. The red screen-position guide is not a Laws-of-the-Game offside decision: a validated decision needs calibrated pitch coordinates, team assignment, attacking direction, ball position and the pass instant. COCO ball detection can miss small or occluded broadcast balls, so missing ball detections remain explicit.
 
 ## Validation performed
 
 - `npm test` - 5 frontend/unit tests pass.
-- `python -m py_compile backend/*.py backend/services/*.py` - backend syntax passes.
-- Browser-tested supplied sample and `Untitled design.mp4`: upload, tracking overlay, active-moment proposals, MP4 export, and duplicate-click lock.
+- `./.venv/bin/python -m unittest backend.test_engine -v` - decoder/context unit tests.
+- `./.venv/bin/python -m compileall -q backend` - backend syntax.
+- Run the browser verification sequence in `docs/verification.md` before submitting from a new machine.
 - `unzip -t` is run for the final submission archive.
 
 ## Submission files

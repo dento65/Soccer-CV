@@ -1,0 +1,28 @@
+target,match_id,name,threshold,before_seconds,after_seconds,policy,accepted_proposals,clip_count,union_seconds,raw_window_seconds,redundant_seconds_removed,context_metrics
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.05,4,3,asymmetric,2,1,11.5,14.0,2.5,unavailable: no independent human context annotations
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.05,8,5,asymmetric,2,1,17.5,26.0,8.5,unavailable: no independent human context annotations
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.05,12,8,asymmetric,2,1,21.5,37.0,15.5,unavailable: no independent human context annotations
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.2,4,3,asymmetric,1,1,7.0,7.0,0.0,unavailable: no independent human context annotations
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.2,8,5,asymmetric,1,1,13.0,13.0,0.0,unavailable: no independent human context annotations
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.2,12,8,asymmetric,1,1,17.0,17.0,0.0,unavailable: no independent human context annotations
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.4,4,3,asymmetric,0,0,0,0,0,unavailable: no independent human context annotations
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.4,8,5,asymmetric,0,0,0,0,0,unavailable: no independent human context annotations
+supplied_calf,45c5f852b39d4a22a4f84bf744e8c38a,Training ground · supplied sample,0.4,12,8,asymmetric,0,0,0,0,0,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.05,4,3,asymmetric,4,3,25.5,25.5,0.0,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.05,8,5,asymmetric,4,1,30.0,43.5,13.5,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.05,12,8,asymmetric,4,1,30.0,63.5,33.5,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.2,4,3,asymmetric,4,3,25.5,25.5,0.0,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.2,8,5,asymmetric,4,1,30.0,43.5,13.5,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.2,12,8,asymmetric,4,1,30.0,63.5,33.5,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.4,4,3,asymmetric,4,3,25.5,25.5,0.0,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.4,8,5,asymmetric,4,1,30.0,43.5,13.5,unavailable: no independent human context annotations
+video_motion,f223efdf3b0a4e1c9550ac79467c3227,VIDEO.MP4,0.4,12,8,asymmetric,4,1,30.0,63.5,33.5,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.05,4,3,asymmetric,4,2,26.01,26.51,0.5,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.05,8,5,asymmetric,4,1,30.01,45.01,15.0,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.05,12,8,asymmetric,4,1,30.01,65.01,35.0,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.2,4,3,asymmetric,4,2,26.01,26.51,0.5,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.2,8,5,asymmetric,4,1,30.01,45.01,15.0,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.2,12,8,asymmetric,4,1,30.01,65.01,35.0,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.4,4,3,asymmetric,4,2,26.01,26.51,0.5,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.4,8,5,asymmetric,4,1,30.01,45.01,15.0,unavailable: no independent human context annotations
+input_motion,63ce3e30668d45148da9f1652c2a4de6,INPUT_VID_30s.mp4,0.4,12,8,asymmetric,4,1,30.01,65.01,35.0,unavailable: no independent human context annotations
